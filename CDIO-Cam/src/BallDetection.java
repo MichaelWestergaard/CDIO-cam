@@ -66,7 +66,7 @@ public class BallDetection {
 	public static void main(String[] args) {
 		System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
 		
-		img = Imgcodecs.imread("map.jpg");
+		img = Imgcodecs.imread("map8.jpg");
 		//Imgproc.resize(img, img, new Size(900, 900),0, 0, Imgproc.INTER_AREA);
 		
 		System.out.println(img.width() + " x " + img.height());
@@ -527,9 +527,32 @@ public class BallDetection {
 				Imgproc.line(img, new Point(i,j*img.height()/120), new Point(img.width(), j*img.height()/120), new Scalar(0,4, 0));
 			}
 		}
+	    
+	    /*
+	    mask = createMask();
+		circles = img.clone();
+        findBalls(mask);
+        findRobot(mask);
+
+		
+        for (Ball ball : balls) {
+        	//System.out.println(ball.x + ", " + ball.y);
+			Imgproc.circle(circles, new Point(ball.x, ball.y), 20, new Scalar(0, 0, 255));
+			Imgproc.putText(circles, "bold", new Point(ball.x, ball.y-20), 3, 1.5, new Scalar(0, 0, 255));
+		}
+        
+        Imgproc.putText(circles, "Bolde tilbage: " + balls.size(), new Point(circles.width()/3, circles.height()-20), 3, 1, new Scalar(255, 0, 0));
+        
+        for (Ball triangle : triangles) {
+        	//System.out.println("roboto" + triangle.x + ", " + triangle.y);
+			Imgproc.circle(circles, new Point(triangle.x, triangle.y), 50, new Scalar(0, 255, 0));
+			Imgproc.putText(circles, "Roboto", new Point(triangle.x, triangle.y), 3, 1.5, new Scalar(0, 255, 0));
+		}
+		*/
 		
 		showImage(edges);
 		showImage(img);
+		//showImage(circles);
 	}
 	
 	private static double angleBetween(Point p1, Point p2) {
