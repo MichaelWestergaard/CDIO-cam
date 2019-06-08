@@ -66,7 +66,7 @@ public class BallDetection {
 	public static void main(String[] args) {
 		System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
 		
-		img = Imgcodecs.imread("map14.jpg");
+		img = Imgcodecs.imread("map.jpg");
 		//Imgproc.resize(img, img, new Size(900, 900),0, 0, Imgproc.INTER_AREA);
 		
 		System.out.println(img.width() + " x " + img.height());
@@ -507,7 +507,7 @@ public class BallDetection {
 				Imgproc.line(img, verticesLast[j], verticesLast[(j+1)%4], new Scalar(0,255,0));
 				Imgproc.putText(img, "Corner", verticesLast[j], 2, 0.5, new Scalar(250,250,250));
 			}
-			Imgproc.putText(img, "wall", new Point(rectLast.center.x, rectLast.center.y), 0, 1.5, new Scalar(0, 255, 0));
+			//Imgproc.putText(img, "wall", new Point(rectLast.center.x, rectLast.center.y), 0, 1.5, new Scalar(0, 255, 0));
 		}
 		
 		//Warp
@@ -519,13 +519,17 @@ public class BallDetection {
 	    dst_mat.put(0, 0, 0.0, 0.0, rectLast.size.height, 0.0, 0.0, rectLast.size.width, rectLast.size.height, rectLast.size.width);
 	    Mat perspectiveTransform = Imgproc.getPerspectiveTransform(src_mat, dst_mat);
 
-	    Mat finalImg = img.clone();
-
-	    Imgproc.warpPerspective(img, finalImg, perspectiveTransform, new Size(rectLast.size.height, rectLast.size.width));
+	    Imgproc.warpPerspective(img, img, perspectiveTransform, new Size(rectLast.size.height, rectLast.size.width));
 		
+	    for (int i = 0; i < img.width(); i++) {
+			for (int j = 0; j < img.height(); j++) {
+				Imgproc.line(img, new Point(i*img.width()/180,j), new Point(i*img.width()/180, img.height()), new Scalar(0,4, 0));
+				Imgproc.line(img, new Point(i,j*img.height()/120), new Point(img.width(), j*img.height()/120), new Scalar(0,4, 0));
+			}
+		}
 		
 		showImage(edges);
-		showImage(finalImg);
+		showImage(img);
 	}
 	
 	private static double angleBetween(Point p1, Point p2) {
