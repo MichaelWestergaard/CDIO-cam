@@ -31,6 +31,7 @@ import org.opencv.core.Mat;
 import org.opencv.core.MatOfPoint;
 import org.opencv.core.MatOfPoint2f;
 import org.opencv.core.Point;
+import org.opencv.core.Rect;
 import org.opencv.core.RotatedRect;
 import org.opencv.core.Scalar;
 import org.opencv.core.Size;
@@ -82,7 +83,8 @@ public class BallDetection {
         slider6.setValue(10);
         slider7.setValue(15);
 		
-        findWallsVirkerIKorrektBelysning();
+        findWalls();
+        //findWallsVirkerIKorrektBelysning();
         /*gg();
         
 		JPanel framePanel = new JPanel();
@@ -374,8 +376,7 @@ public class BallDetection {
 		
 	}
 	
-
-	private static void findWalls() {
+	private static void findWallsFarveFredag() {
 		Mat canny = new Mat();
 		List<MatOfPoint> contoursWalls = new ArrayList<MatOfPoint>();
 		Mat mask = createMaskWalls();
@@ -450,6 +451,100 @@ public class BallDetection {
 		
 	}
 	
+	private static Mat createMaskWallsEdges() {
+		Mat mask = new Mat();
+		
+		Imgproc.cvtColor(img, mask, Imgproc.COLOR_BGR2GRAY);
+		
+		Imgproc.adaptiveThreshold(mask, mask, 255, Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C, Imgproc.THRESH_BINARY, 11, 2);
+		
+		return mask;
+	}
+	
+	private static void findWalls() {
+		
+		Mat dst = new Mat();
+		Mat edges = new Mat();
+		List<MatOfPoint> contoursWalls = new ArrayList<MatOfPoint>();
+		
+		Imgproc.GaussianBlur(img, dst, new Size(3,3), 0);
+		
+		Mat element = Imgproc.getStructuringElement(Imgproc.CV_SHAPE_RECT, new Size(2 * 8 + 1, 2 * 8 + 1), new Point(8, 8));
+		
+		int lowThresh = 90;
+
+		Imgproc.morphologyEx(dst, dst, Imgproc.MORPH_CLOSE, element);
+		Imgproc.Canny(dst, edges, lowThresh, lowThresh*3, 3, true);
+
+		
+		Imgproc.findContours(edges, contoursWalls, new Mat(), Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_NONE);
+
+		double areaLast = 0;
+		Point[] verticesLast = null;
+		RotatedRect rectLast = null;
+		
+		for (int i = 0; i < contoursWalls.size(); i++) {
+			
+			MatOfPoint2f temp = new MatOfPoint2f(contoursWalls.get(i).toArray());
+			MatOfPoint2f approxCurve = new MatOfPoint2f();
+			Imgproc.approxPolyDP(temp, approxCurve, Imgproc.arcLength(temp, true) * 0.04, true);
+			
+			RotatedRect rect = Imgproc.minAreaRect(new MatOfPoint2f(contoursWalls.get(i).toArray()));
+			Point[] vertices = new Point[4];  
+	        rect.points(vertices);
+	        
+			double area = rect.size.width * rect.size.height;
+			
+			if(area > areaLast) {
+	        	verticesLast = vertices;
+		        rectLast = rect;
+				areaLast = area;
+			}
+		}
+		
+		if(verticesLast != null && rectLast != null) {
+			for(int j = 0; j < 4; j++) {
+				Imgproc.line(img, verticesLast[j], verticesLast[(j+1)%4], new Scalar(0,255,0));
+				Imgproc.putText(img, "Corner", verticesLast[j], 2, 0.5, new Scalar(250,250,250));
+			}
+			Imgproc.putText(img, "wall", new Point(rectLast.center.x, rectLast.center.y), 0, 1.5, new Scalar(0, 255, 0));
+		}
+		
+		//Warp
+		
+		Mat src_mat=new Mat(4,1,CvType.CV_32FC2);
+	    Mat dst_mat=new Mat(4,1,CvType.CV_32FC2);
+
+	    src_mat.put(0, 0, verticesLast[2].x, verticesLast[2].y, verticesLast[3].x, verticesLast[3].y, verticesLast[1].x, verticesLast[1].y, verticesLast[0].x, verticesLast[0].y);
+	    dst_mat.put(0, 0, 0.0, 0.0, rectLast.size.height, 0.0, 0.0, rectLast.size.width, rectLast.size.height, rectLast.size.width);
+	    Mat perspectiveTransform = Imgproc.getPerspectiveTransform(src_mat, dst_mat);
+
+	    Mat finalImg = img.clone();
+
+	    Imgproc.warpPerspective(img, finalImg, perspectiveTransform, new Size(rectLast.size.height, rectLast.size.width));
+		
+		
+		showImage(edges);
+		showImage(finalImg);
+	}
+	
+	private static double angleBetween(Point p1, Point p2) {
+		double p1Length = Math.sqrt(Math.pow(p1.x, 2)+Math.pow(p1.y, 2));
+		double p2Length = Math.sqrt(Math.pow(p2.x, 2)+Math.pow(p2.y, 2));
+		
+		double dotProduct = (p1.x*p2.x)+(p1.y*p2.y);
+		
+		double a = dotProduct / (p1Length*p2Length);
+		
+		return Math.acos(a) * 100;
+	}
+	
+	private static void showImage(Mat mat) {
+		JFrame f = new JFrame();
+		f.add(new JPanel().add(new JLabel(new ImageIcon(HighGui.toBufferedImage(mat)))));
+		f.setSize((int)mat.size().width, (int)mat.size().height+50);
+		f.setVisible(true);
+	}
 	
 	public static Image toBufferedImage(Mat m){
         int type = BufferedImage.TYPE_BYTE_GRAY;
