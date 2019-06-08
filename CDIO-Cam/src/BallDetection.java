@@ -9,6 +9,8 @@ import java.awt.image.RenderedImage;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 
@@ -63,7 +65,7 @@ public class BallDetection {
 	public static void main(String[] args) {
 		System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
 		
-		img = Imgcodecs.imread("map.jpg");
+		img = Imgcodecs.imread("map14.jpg");
 		//Imgproc.resize(img, img, new Size(900, 900),0, 0, Imgproc.INTER_AREA);
 		
 		System.out.println(img.width() + " x " + img.height());
@@ -80,7 +82,8 @@ public class BallDetection {
         slider6.setValue(10);
         slider7.setValue(15);
 		
-        gg();
+        findWallsVirkerIKorrektBelysning();
+        /*gg();
         
 		JPanel framePanel = new JPanel();
 
@@ -162,20 +165,19 @@ public class BallDetection {
 			}
 		});
 
-        //frame.pack();
-        //frame.setVisible(true);
+        frame.pack();
+        frame.setVisible(true);
+        */
 	}
 	
 	private static void gg() {
+
 		mask = createMask();
 		circles = img.clone();
+        findBalls(mask);
+        findRobot(mask);
 
-		findWalls();
 		
-        //findBalls(mask);
-        //findRobot(mask);
-
-		/*
         for (Ball ball : balls) {
         	//System.out.println(ball.x + ", " + ball.y);
 			Imgproc.circle(circles, new Point(ball.x, ball.y), 20, new Scalar(0, 0, 255));
@@ -189,7 +191,6 @@ public class BallDetection {
 			Imgproc.circle(circles, new Point(triangle.x, triangle.y), 50, new Scalar(0, 255, 0));
 			Imgproc.putText(circles, "Roboto", new Point(triangle.x, triangle.y), 3, 1.5, new Scalar(0, 255, 0));
 		}
-		*/
 	}
 	
 	private static Mat createMask() {
@@ -303,7 +304,7 @@ public class BallDetection {
 		System.out.println("Balls found: " + balls.size());
 	}
 	
-	private static void findWalls() {
+	private static void findWallsVirkerIKorrektBelysning() {
 		Mat canny = new Mat();
 		List<MatOfPoint> contoursWalls = new ArrayList<MatOfPoint>();
 		Mat mask = createMaskWalls();
@@ -315,6 +316,8 @@ public class BallDetection {
 		Imgproc.findContours(canny, contoursWalls, new Mat(), Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE);
 		
 		double areaLast = 0;
+		Point[] verticesLast = null;
+		RotatedRect rectLast = null;
 		
 		for (int i = 0; i < contoursWalls.size(); i++) {
 			
@@ -327,18 +330,37 @@ public class BallDetection {
 					Point[] vertices = new Point[4];  
 			        rect.points(vertices);
 			        
-					for(int j = 0; j < 4; j++) {
-						Imgproc.line(img, vertices[j], vertices[(j+1)%4], new Scalar(0,255,0));
-						Imgproc.putText(img, "Corner  i =  " + i, vertices[j], 2, 0.5, new Scalar(250,250,250));
-						//System.out.println("Corner  i =  " + i + " ff " + vertices[j]);
-					}
-					Imgproc.putText(img, "wall", new Point(rect.center.x, rect.center.y), 0, 1.5, new Scalar(0, 255, 0));
+			        verticesLast = vertices;
+			        rectLast = rect;
 				}
 				areaLast = area;
 			}
 			
 		}
 		
+		if(verticesLast != null && rectLast != null) {
+			for(int j = 0; j < 4; j++) {
+				Imgproc.line(img, verticesLast[j], verticesLast[(j+1)%4], new Scalar(0,255,0));
+				Imgproc.putText(img, "Corner", verticesLast[j], 2, 0.5, new Scalar(250,250,250));
+			}
+			Imgproc.putText(img, "wall", new Point(rectLast.center.x, rectLast.center.y), 0, 1.5, new Scalar(0, 255, 0));
+		}
+				
+		//Warp
+		
+		Mat src_mat=new Mat(4,1,CvType.CV_32FC2);
+	    Mat dst_mat=new Mat(4,1,CvType.CV_32FC2);
+
+	    
+	    
+	    src_mat.put(0, 0, verticesLast[2].x, verticesLast[2].y, verticesLast[3].x, verticesLast[3].y, verticesLast[1].x, verticesLast[1].y, verticesLast[0].x, verticesLast[0].y);
+	    dst_mat.put(0, 0, 0.0, 0.0, rectLast.size.height, 0.0, 0.0, rectLast.size.width, rectLast.size.height, rectLast.size.width);
+	    Mat perspectiveTransform = Imgproc.getPerspectiveTransform(src_mat, dst_mat);
+
+	    Mat dst = img.clone();
+
+	    Imgproc.warpPerspective(img, dst, perspectiveTransform, new Size(rectLast.size.height, rectLast.size.width));
+	    
         JPanel framePanel = new JPanel();
 
         imgCaptureLabelMask = new JLabel(new ImageIcon(HighGui.toBufferedImage(img)));
@@ -351,6 +373,83 @@ public class BallDetection {
         
 		
 	}
+	
+
+	private static void findWalls() {
+		Mat canny = new Mat();
+		List<MatOfPoint> contoursWalls = new ArrayList<MatOfPoint>();
+		Mat mask = createMaskWalls();
+		
+		JFrame frame2 = new JFrame("Video");
+        frame2.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        
+		Imgproc.Canny(mask, canny, 200, 750);
+		Imgproc.findContours(canny, contoursWalls, new Mat(), Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE);
+		
+		double areaLast = 0;
+		Point[] verticesLast = null;
+		RotatedRect rectLast = null;
+		
+		for (int i = 0; i < contoursWalls.size(); i++) {
+			
+			double area = Imgproc.contourArea(contoursWalls.get(i));
+			MatOfPoint2f temp = new MatOfPoint2f(contoursWalls.get(i).toArray());
+			MatOfPoint2f approxCurve = new MatOfPoint2f();
+			Imgproc.approxPolyDP(temp, approxCurve, Imgproc.arcLength(temp, true) * 0.02, true);
+			
+			System.out.println(approxCurve.total());
+			
+			if(approxCurve.total() == 4 && area > 0.0) {
+				System.out.println(area + " - " + areaLast);
+				if(area > areaLast) {
+					RotatedRect rect = Imgproc.minAreaRect(new MatOfPoint2f(contoursWalls.get(i).toArray()));
+					Point[] vertices = new Point[4];  
+			        rect.points(vertices);
+			        
+			        verticesLast = vertices;
+			        rectLast = rect;
+				}
+				areaLast = area;
+			}
+			
+		}
+		
+		if(verticesLast != null && rectLast != null) {
+			for(int j = 0; j < 4; j++) {
+				Imgproc.line(img, verticesLast[j], verticesLast[(j+1)%4], new Scalar(0,255,0));
+				Imgproc.putText(img, "Corner", verticesLast[j], 2, 0.5, new Scalar(250,250,250));
+			}
+			Imgproc.putText(img, "wall", new Point(rectLast.center.x, rectLast.center.y), 0, 1.5, new Scalar(0, 255, 0));
+		}
+				
+		//Warp
+		/*
+		Mat src_mat=new Mat(4,1,CvType.CV_32FC2);
+	    Mat dst_mat=new Mat(4,1,CvType.CV_32FC2);
+
+	    
+	    
+	    src_mat.put(0, 0, verticesLast[2].x, verticesLast[2].y, verticesLast[3].x, verticesLast[3].y, verticesLast[1].x, verticesLast[1].y, verticesLast[0].x, verticesLast[0].y);
+	    dst_mat.put(0, 0, 0.0, 0.0, rectLast.size.height, 0.0, 0.0, rectLast.size.width, rectLast.size.height, rectLast.size.width);
+	    Mat perspectiveTransform = Imgproc.getPerspectiveTransform(src_mat, dst_mat);
+
+	    Mat dst = img.clone();
+
+	    Imgproc.warpPerspective(img, dst, perspectiveTransform, new Size(rectLast.size.height, rectLast.size.width));
+	    */
+        JPanel framePanel = new JPanel();
+
+        imgCaptureLabelMask = new JLabel(new ImageIcon(HighGui.toBufferedImage(img)));
+        framePanel.add(imgCaptureLabelMask);
+        frame2.getContentPane().add(framePanel, BorderLayout.CENTER);
+        
+        frame2.repaint();
+        frame2.pack();
+        frame2.setVisible(true);
+        
+		
+	}
+	
 	
 	public static Image toBufferedImage(Mat m){
         int type = BufferedImage.TYPE_BYTE_GRAY;
