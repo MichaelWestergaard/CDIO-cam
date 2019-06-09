@@ -66,11 +66,10 @@ public class BallDetection {
 	public static void main(String[] args) {
 		System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
 		
-		img = Imgcodecs.imread("map8.jpg");
+		img = Imgcodecs.imread("images/2.jpg");
+		
 		//Imgproc.resize(img, img, new Size(900, 900),0, 0, Imgproc.INTER_AREA);
-		
-		System.out.println(img.width() + " x " + img.height());
-		
+				
 		frame = new JFrame("Video");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         
@@ -267,7 +266,6 @@ public class BallDetection {
 		contours.clear();
 		balls.clear();
 		
-		
 		Imgproc.Canny(mask, canny, 250, 750);
 		Imgproc.findContours(canny, contours, new Mat(), Imgproc.RETR_TREE, Imgproc.CHAIN_APPROX_SIMPLE);
 
@@ -303,7 +301,7 @@ public class BallDetection {
 			}
 		}
 		
-		System.out.println("Balls found: " + balls.size());
+		//System.out.println("Balls found: " + balls.size());
 	}
 	
 	private static void findWallsVirkerIKorrektBelysning() {
@@ -479,7 +477,10 @@ public class BallDetection {
 		
 		Imgproc.findContours(edges, contoursWalls, new Mat(), Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_NONE);
 
+		
 		double areaLast = 0;
+		double crossArea = 0.0;
+		int crossI = 0;
 		Point[] verticesLast = null;
 		RotatedRect rectLast = null;
 		
@@ -487,7 +488,13 @@ public class BallDetection {
 			
 			MatOfPoint2f temp = new MatOfPoint2f(contoursWalls.get(i).toArray());
 			MatOfPoint2f approxCurve = new MatOfPoint2f();
-			Imgproc.approxPolyDP(temp, approxCurve, Imgproc.arcLength(temp, true) * 0.04, true);
+			Imgproc.approxPolyDP(temp, approxCurve, Imgproc.arcLength(temp, true) * 0.02, true);
+			
+			if(approxCurve.total() == 12) {
+				double crossAreaLocal = Imgproc.contourArea(approxCurve);
+				if(crossAreaLocal > crossArea)
+					crossI = i;
+			}
 			
 			RotatedRect rect = Imgproc.minAreaRect(new MatOfPoint2f(contoursWalls.get(i).toArray()));
 			Point[] vertices = new Point[4];  
@@ -510,6 +517,12 @@ public class BallDetection {
 			//Imgproc.putText(img, "wall", new Point(rectLast.center.x, rectLast.center.y), 0, 1.5, new Scalar(0, 255, 0));
 		}
 		
+		if(crossI > 0) {
+			
+			System.out.println(contoursWalls.get(crossI).rows());
+			Imgproc.drawContours(img, contoursWalls, crossI, new Scalar(255,0,0), Imgproc.FILLED);
+		}
+		
 		//Warp
 		
 		Mat src_mat=new Mat(4,1,CvType.CV_32FC2);
@@ -520,57 +533,123 @@ public class BallDetection {
 	    Mat perspectiveTransform = Imgproc.getPerspectiveTransform(src_mat, dst_mat);
 
 	    Imgproc.warpPerspective(img, img, perspectiveTransform, new Size(rectLast.size.height, rectLast.size.width));
-		
-	    for (int i = 0; i < img.width(); i++) {
-			for (int j = 0; j < img.height(); j++) {
-				Imgproc.line(img, new Point(i*img.width()/180,j), new Point(i*img.width()/180, img.height()), new Scalar(0,4, 0));
-				Imgproc.line(img, new Point(i,j*img.height()/120), new Point(img.width(), j*img.height()/120), new Scalar(0,4, 0));
-			}
-		}
-	    
-	    /*
+
 	    mask = createMask();
 		circles = img.clone();
         findBalls(mask);
-        findRobot(mask);
-
-		
+        //findRobot(mask);
+        
+        Mat imageWithGrid = img.clone();
+        
+        double gridSizeHorizontal = img.width()/180;
+        double gridSizeVertical = img.height()/120;
+        
+	    for (int i = 0; i < img.width(); i++) {
+			for (int j = 0; j < img.height(); j++) {
+				Imgproc.line(imageWithGrid, new Point(i*gridSizeHorizontal,j), new Point(i*gridSizeHorizontal, img.height()), new Scalar(0,4, 0));
+				Imgproc.line(imageWithGrid, new Point(i,j*gridSizeVertical), new Point(img.width(), j*gridSizeVertical), new Scalar(0,4, 0));
+			}
+		}
+	    
         for (Ball ball : balls) {
-        	//System.out.println(ball.x + ", " + ball.y);
-			Imgproc.circle(circles, new Point(ball.x, ball.y), 20, new Scalar(0, 0, 255));
-			Imgproc.putText(circles, "bold", new Point(ball.x, ball.y-20), 3, 1.5, new Scalar(0, 0, 255));
+			Imgproc.circle(imageWithGrid, new Point(ball.x, ball.y), 20, new Scalar(0, 0, 255));
+			Imgproc.putText(imageWithGrid, "bold " + Math.round(ball.x/gridSizeHorizontal) + ", " + Math.round(ball.y/gridSizeVertical), new Point(ball.x, ball.y-20), 3, 1.5, new Scalar(0, 0, 255));
 		}
         
-        Imgproc.putText(circles, "Bolde tilbage: " + balls.size(), new Point(circles.width()/3, circles.height()-20), 3, 1, new Scalar(255, 0, 0));
+        Imgproc.putText(imageWithGrid, "Bolde tilbage: " + balls.size(), new Point(circles.width()/3, circles.height()-20), 3, 1, new Scalar(255, 0, 0));
+        		
+		showImage(edges);
+		showImage(img);
+		showImage(imageWithGrid);
+        //generateMap(imageWithGrid);
+	}
+	
+	private static void generateMap(Mat img) {
+		double gridSizeHorizontal = img.width()/180;
+        double gridSizeVertical = img.height()/120;
         
-        for (Ball triangle : triangles) {
-        	//System.out.println("roboto" + triangle.x + ", " + triangle.y);
-			Imgproc.circle(circles, new Point(triangle.x, triangle.y), 50, new Scalar(0, 255, 0));
-			Imgproc.putText(circles, "Roboto", new Point(triangle.x, triangle.y), 3, 1.5, new Scalar(0, 255, 0));
+        int[][] map = new int[180][120];
+        
+        for (int i = 0; i < 180; i++) {
+			for (int j = 0; j < 120; j++) {
+				map[i][j] = 0;
+			}
+		}
+		
+		for (int i = 0; i < 180; i++) {
+			for (int j = 0; j < 120; j++) {
+				boolean found = false;
+				for (Ball ball : balls) {
+					if(!found) {
+						int ballX = (int) Math.round(ball.x/gridSizeHorizontal);
+						int ballY = (int) Math.round(ball.y/gridSizeVertical);
+						if(ballX == i && ballY == j) {
+							found = true;
+						}
+					} else {
+						break;
+					}
+				}
+				
+				if(found) {
+					map[i-3][j-2] = 1;
+					map[i-3][j-1] = 1;
+					map[i-3][j] = 1;
+					map[i-3][j+1] = 1;
+					
+					map[i-2][j-2] = 1;
+					map[i-2][j-1] = 1;
+					map[i-2][j] = 1;
+					map[i-2][j+1] = 1;
+					
+					map[i-1][j-2] = 1;
+					map[i-1][j-1] = 1;
+					map[i-1][j] = 1;
+					map[i-1][j+1] = 1;
+					
+					map[i][j-2] = 1;
+					map[i][j-1] = 1;
+					map[i][j] = 1;
+					map[i][j+1] = 1;
+				}
+			}
+		}
+		
+		/*
+		for (int i = 0; i < 180; i++) {
+			for (int j = 0; j < 120; j++) {
+				System.out.print(map[i][j]);
+			}
+			System.out.println();
 		}
 		*/
 		
-		showImage(edges);
-		showImage(img);
-		//showImage(circles);
-	}
-	
-	private static double angleBetween(Point p1, Point p2) {
-		double p1Length = Math.sqrt(Math.pow(p1.x, 2)+Math.pow(p1.y, 2));
-		double p2Length = Math.sqrt(Math.pow(p2.x, 2)+Math.pow(p2.y, 2));
-		
-		double dotProduct = (p1.x*p2.x)+(p1.y*p2.y);
-		
-		double a = dotProduct / (p1Length*p2Length);
-		
-		return Math.acos(a) * 100;
+		System.out.println("int[][] map = new int[][]{");
+		for (int i = 0; i < 180; i++) {
+			System.out.print("{ ");
+			for (int j = 0; j < 120; j++) {
+				System.out.print(map[i][j] + "");
+				if(j+1 != 120) {
+					System.out.print(", ");
+				}
+			}
+			System.out.print(" }");
+			if(i+1 != 180) {
+				System.out.print(",");
+			}
+			System.out.println();
+		}
+		System.out.println("};");
 	}
 	
 	private static void showImage(Mat mat) {
 		JFrame f = new JFrame();
+		f.setTitle(mat + "");
 		f.add(new JPanel().add(new JLabel(new ImageIcon(HighGui.toBufferedImage(mat)))));
 		f.setSize((int)mat.size().width, (int)mat.size().height+50);
 		f.setVisible(true);
+
+        f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 	}
 	
 	public static Image toBufferedImage(Mat m){
